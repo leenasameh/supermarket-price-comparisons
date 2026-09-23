@@ -1,29 +1,43 @@
+import io
 import json
 import re
-import io
-import hashlib
-from PIL import Image
-from google import genai
-import streamlit as st
+import time
 
+import streamlit as st
+from google import genai
+from PIL import Image
+
+
+# ==========================================
+# SETTINGS
+# ==========================================
 
 MODEL_NAME = "gemini-3.6-flash"
 
+MAX_RETRIES = 3
 
-# ---------------------------------------
-# Gemini Client
-# ---------------------------------------
+MAX_IMAGE_DIMENSION = 1600
+
+JPEG_QUALITY = 85
+
+
+# ==========================================
+# GEMINI CLIENT
+# ==========================================
 
 def get_client():
 
-    api_key = st.secrets.get(
-        "GEMINI_API_KEY",
-        ""
-    )
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+
+    except Exception:
+        api_key = ""
 
     if not api_key:
+
         raise ValueError(
-            "Gemini API Key is missing."
+            "Gemini API Key is missing. "
+            "Add GEMINI_API_KEY to Streamlit Secrets."
         )
 
     return genai.Client(
@@ -31,22 +45,22 @@ def get_client():
     )
 
 
-# ---------------------------------------
-# Resize image
-# ---------------------------------------
+# ==========================================
+# IMAGE OPTIMIZATION
+# ==========================================
 
-def optimize_image(image):
+def optimize_image_bytes(file_bytes):
 
-    image = image.convert("RGB")
-
-    max_size = 1600
+    image = Image.open(
+        io.BytesIO(file_bytes)
+    ).convert("RGB")
 
     width, height = image.size
 
-    if max(width, height) > max_size:
+    if max(width, height) > MAX_IMAGE_DIMENSION:
 
         ratio = (
-            max_size
+            MAX_IMAGE_DIMENSION
             /
             max(width, height)
         )
@@ -67,32 +81,23 @@ def optimize_image(image):
             Image.Resampling.LANCZOS
         )
 
-    return image
-
-
-# ---------------------------------------
-# Convert image → bytes
-# ---------------------------------------
-
-def image_to_bytes(image):
-
-    buffer = io.BytesIO()
+    output = io.BytesIO()
 
     image.save(
-        buffer,
+        output,
         format="JPEG",
-        quality=85,
+        quality=JPEG_QUALITY,
         optimize=True
     )
 
-    return buffer.getvalue()
+    return output.getvalue()
 
 
-# ---------------------------------------
-# JSON cleaner
-# ---------------------------------------
+# ==========================================
+# JSON CLEANER
+# ==========================================
 
-def clean_json(text):
+def clean_json_text(text):
 
     if not text:
         return "[]"
@@ -100,14 +105,20 @@ def clean_json(text):
     text = text.strip()
 
     text = re.sub(
-        r"```json",
+        r"^```json\s*",
         "",
         text,
         flags=re.IGNORECASE
     )
 
     text = re.sub(
-        r"```",
+        r"^```\s*",
+        "",
+        text
+    )
+
+    text = re.sub(
+        r"\s*```$",
         "",
         text
     )
@@ -119,7 +130,6 @@ def clean_json(text):
         start != -1
         and end != -1
     ):
-
         text = text[
             start:end + 1
         ]
@@ -127,9 +137,9 @@ def clean_json(text):
     return text.strip()
 
 
-# ---------------------------------------
-# Number helpers
-# ---------------------------------------
+# ==========================================
+# SAFE NUMBER HELPERS
+# ==========================================
 
 def safe_float(
     value,
@@ -149,7 +159,8 @@ def safe_float(
 
         return float(value)
 
-    except:
+    except (ValueError, TypeError):
+
         return default
 
 
@@ -169,100 +180,385 @@ def safe_int(
 
         return value
 
-    except:
+    except (ValueError, TypeError):
+
         return default
 
 
-# ---------------------------------------
-# CACHE
-# ---------------------------------------
+# ==========================================
+# PRODUCT CLEANING
+# ==========================================
 
-@st.cache_data(
-    show_spinner=False,
-    ttl=3600
-)
-def extract_products_cached(
-    image_bytes
-):
+def normalize_product(item):
 
-    client = get_client()
+    if not isinstance(
+        item,
+        dict
+    ):
+        return None
 
-    image = Image.open(
-        io.BytesIO(
-            image_bytes
+
+    # ------------------------------
+    # NAME
+    # ------------------------------
+
+    name = str(
+        item.get(
+            "name",
+            ""
         )
+    ).strip()
+
+    if not name:
+        return None
+
+
+    # ------------------------------
+    # PRICE
+    # ------------------------------
+
+    price = safe_float(
+        item.get(
+            "price"
+        ),
+        None
     )
 
-    prompt = """
-Read this supermarket promotional flyer.
+    if (
+        price is None
+        or price <= 0
+    ):
+        return None
 
-Extract every clearly visible product that has
-a readable current price.
 
-Return ONLY JSON.
+    # ------------------------------
+    # OLD PRICE
+    # ------------------------------
 
-No markdown.
-No explanation.
+    old_price = safe_float(
+        item.get(
+            "old_price"
+        ),
+        None
+    )
 
-Format:
+
+    # ------------------------------
+    # QUANTITY
+    # ------------------------------
+
+    quantity = safe_float(
+        item.get(
+            "quantity"
+        ),
+        1
+    )
+
+    if (
+        quantity is None
+        or quantity <= 0
+    ):
+        quantity = 1
+
+
+    # ------------------------------
+    # PACKAGE COUNT
+    # ------------------------------
+
+    package_count = safe_int(
+        item.get(
+            "package_count"
+        ),
+        1
+    )
+
+
+    # ------------------------------
+    # UNIT
+    # ------------------------------
+
+    unit = str(
+        item.get(
+            "unit",
+            "piece"
+        )
+    ).strip()
+
+
+    unit_map = {
+
+        # Liter
+        "l": "L",
+        "liter": "L",
+        "litre": "L",
+        "liters": "L",
+        "litres": "L",
+        "لتر": "L",
+
+        # Milliliter
+        "ml": "ml",
+        "milliliter": "ml",
+        "milliliters": "ml",
+        "millilitre": "ml",
+        "millilitres": "ml",
+        "مل": "ml",
+
+        # Kilogram
+        "kg": "kg",
+        "kilogram": "kg",
+        "kilograms": "kg",
+        "كيلو": "kg",
+        "كيلوجرام": "kg",
+
+        # Gram
+        "g": "g",
+        "gram": "g",
+        "grams": "g",
+        "جرام": "g",
+
+        # Piece
+        "piece": "piece",
+        "pieces": "piece",
+        "pc": "piece",
+        "pcs": "piece",
+        "قطعة": "piece",
+        "قطعه": "piece",
+
+        # Pack
+        "pack": "pack",
+        "packs": "pack",
+        "عبوة": "pack",
+        "عبوه": "pack"
+    }
+
+
+    unit = unit_map.get(
+        unit.lower(),
+        unit
+    )
+
+
+    allowed_units = {
+        "kg",
+        "g",
+        "L",
+        "ml",
+        "piece",
+        "pack"
+    }
+
+
+    if unit not in allowed_units:
+        unit = "piece"
+
+
+    # ------------------------------
+    # BRAND
+    # ------------------------------
+
+    brand = str(
+        item.get(
+            "brand",
+            ""
+        )
+    ).strip()
+
+
+    # ------------------------------
+    # NOTES
+    # ------------------------------
+
+    notes = str(
+        item.get(
+            "notes",
+            ""
+        )
+    ).strip()
+
+
+    return {
+
+        "name":
+            name,
+
+        "brand":
+            brand,
+
+        "price":
+            price,
+
+        "old_price":
+            old_price,
+
+        "quantity":
+            quantity,
+
+        "unit":
+            unit,
+
+        "package_count":
+            package_count,
+
+        "notes":
+            notes
+    }
+
+
+# ==========================================
+# PROMPT
+# ==========================================
+
+PROMPT = """
+You are an expert supermarket flyer reader.
+
+You will receive one or more images.
+
+IMPORTANT:
+ALL supplied images belong to the SAME supermarket offer.
+
+The images may be different pages of the same flyer.
+
+Your job is to carefully analyze ALL supplied images
+and extract EVERY clearly visible product that has
+a readable current promotional price.
+
+Return ONE combined JSON array containing the products
+from ALL supplied pages.
+
+Return ONLY valid JSON.
+
+DO NOT:
+- return markdown
+- return explanations
+- return comments
+- invent products
+- invent prices
+- invent package sizes
+
+Use this exact JSON structure:
 
 [
- {
-   "name": "product name",
-   "brand": "brand",
-   "price": 45,
-   "old_price": null,
-   "quantity": 1,
-   "unit": "L",
-   "package_count": 1,
-   "notes": ""
- }
+    {
+        "name": "Product name",
+        "brand": "Brand name",
+        "price": 45.0,
+        "old_price": 50.0,
+        "quantity": 1.0,
+        "unit": "L",
+        "package_count": 1,
+        "notes": ""
+    }
 ]
 
-Rules:
+========================================
+PRICE
+========================================
 
-price = current offer price.
+price = the CURRENT promotional price.
 
-old_price = previous crossed-out price.
-Use null if unavailable.
+Example:
 
-quantity = quantity of ONE package.
+Old price: 55 EGP
+Offer price: 45 EGP
 
-package_count = number of packages included
-in the displayed price.
+Return:
 
-Examples:
+"price": 45
+"old_price": 55
 
-1 L milk:
+If the old price is not clearly visible:
+
+"old_price": null
+
+
+========================================
+QUANTITY
+========================================
+
+quantity represents the quantity
+of ONE package.
+
+package_count represents how many
+packages the customer receives.
+
+
+Example:
+
+Milk 1 Liter
+
 quantity = 1
 unit = "L"
 package_count = 1
 
-1.5 L oil:
+
+Example:
+
+Oil 1.5 Liter
+
 quantity = 1.5
 unit = "L"
 package_count = 1
 
-2 x 1 L:
+
+Example:
+
+2 × 1 Liter
+
 quantity = 1
 unit = "L"
 package_count = 2
 
-6 x 330 ml:
+
+Example:
+
+6 × 330 ml
+
 quantity = 330
 unit = "ml"
 package_count = 6
 
-750g + 250g free:
+
+Example:
+
+3 pieces
+
+quantity = 1
+unit = "piece"
+package_count = 3
+
+
+========================================
+FREE QUANTITY
+========================================
+
+Example:
+
+750 g + 250 g FREE
+
+Return:
+
 quantity = 1000
 unit = "g"
 package_count = 1
+notes = "750g + 250g free"
 
-Buy 2 Get 1 Free:
+
+Example:
+
+Buy 2 Get 1 Free
+
+Return:
+
+quantity = 1
 package_count = 3
 notes = "Buy 2 Get 1 Free"
 
-Allowed units ONLY:
+
+========================================
+ALLOWED UNITS
+========================================
+
+Use ONLY:
 
 kg
 g
@@ -271,215 +567,363 @@ ml
 piece
 pack
 
-If quantity is unknown:
+
+========================================
+UNKNOWN SIZE
+========================================
+
+If the price is readable but the package
+size cannot be determined:
 
 quantity = 1
 unit = "piece"
 package_count = 1
 
-Keep Arabic names in Arabic.
-Keep English names in English.
 
-Do not extract:
-headings
-advertising text
-phone numbers
-category names
+========================================
+LANGUAGE
+========================================
 
-Never invent a price.
+If the product name is written in Arabic,
+keep it in Arabic.
+
+If the product name is written in English,
+keep it in English.
+
+Do not unnecessarily translate product names.
+
+
+========================================
+BRAND
+========================================
+
+Only include the brand when it is clearly visible.
+
+If it is not clearly visible:
+
+"brand": ""
+
+
+========================================
+DO NOT EXTRACT
+========================================
+
+Do NOT extract:
+
+- headings
+- category names
+- store names
+- phone numbers
+- QR codes
+- advertising slogans
+- decorative text
+- dates
+- addresses
+
+
+========================================
+DUPLICATES
+========================================
+
+If the EXACT same product appears more than once
+across the supplied pages with the same price
+and package size, include it only once.
+
+
+========================================
+IMPORTANT
+========================================
+
+Read every supplied image carefully.
+
+Never guess an unreadable price.
+
+Extract as many clearly readable products
+as possible.
+
+Return ONLY the JSON array.
 """
 
-    response = (
-        client.models.generate_content(
-            model=MODEL_NAME,
-            contents=[
-                prompt,
-                image
-            ]
+
+# ==========================================
+# GEMINI REQUEST WITH RETRY
+# ==========================================
+
+def send_to_gemini(
+    images_tuple
+):
+
+    client = get_client()
+
+    contents = [
+        PROMPT
+    ]
+
+
+    # Add all images to the SAME request
+    for image_bytes in images_tuple:
+
+        image = Image.open(
+            io.BytesIO(
+                image_bytes
+            )
+        ).convert(
+            "RGB"
         )
+
+        contents.append(
+            image
+        )
+
+
+    # ======================================
+    # RETRY LOOP
+    # ======================================
+
+    for attempt in range(
+        MAX_RETRIES + 1
+    ):
+
+        try:
+
+            response = (
+                client.models.generate_content(
+                    model=MODEL_NAME,
+                    contents=contents
+                )
+            )
+
+            # Request succeeded
+            return response
+
+
+        except Exception as error:
+
+            error_text = str(
+                error
+            )
+
+
+            # ==================================
+            # 503 SERVER BUSY
+            # ==================================
+
+            is_503 = (
+                "503" in error_text
+                or
+                "UNAVAILABLE"
+                in error_text
+                or
+                "high demand"
+                in error_text.lower()
+            )
+
+
+            if is_503:
+
+                # Retry if attempts remain
+                if attempt < MAX_RETRIES:
+
+                    wait_time = (
+                        3
+                        *
+                        (
+                            2 ** attempt
+                        )
+                    )
+
+                    time.sleep(
+                        wait_time
+                    )
+
+                    continue
+
+
+                # No attempts left
+                raise RuntimeError(
+                    "Gemini is currently busy "
+                    "because of high demand. "
+                    "Please wait a minute "
+                    "and try again."
+                )
+
+
+            # ==================================
+            # 429 QUOTA
+            # ==================================
+
+            is_429 = (
+                "429" in error_text
+                or
+                "RESOURCE_EXHAUSTED"
+                in error_text
+                or
+                "quota"
+                in error_text.lower()
+            )
+
+
+            if is_429:
+
+                raise RuntimeError(
+                    "Gemini usage limit has "
+                    "been reached. "
+                    "Please try again later."
+                )
+
+
+            # ==================================
+            # OTHER GEMINI ERROR
+            # ==================================
+
+            raise RuntimeError(
+                f"Gemini error: {error}"
+            )
+
+
+    raise RuntimeError(
+        "Gemini request failed."
     )
 
-    text = clean_json(
-        response.text
+
+# ==========================================
+# CACHE
+# ==========================================
+
+@st.cache_data(
+    show_spinner=False,
+    ttl=3600
+)
+def extract_offer_products_cached(
+    images_tuple
+):
+
+    response = send_to_gemini(
+        images_tuple
     )
+
+
+    # ======================================
+    # GET RESPONSE TEXT
+    # ======================================
+
+    response_text = getattr(
+        response,
+        "text",
+        None
+    )
+
+
+    if not response_text:
+
+        raise ValueError(
+            "Gemini returned an empty response."
+        )
+
+
+    # ======================================
+    # CLEAN JSON
+    # ======================================
+
+    cleaned_text = clean_json_text(
+        response_text
+    )
+
+
+    # ======================================
+    # PARSE JSON
+    # ======================================
 
     try:
 
         data = json.loads(
-            text
+            cleaned_text
         )
 
-    except:
+    except json.JSONDecodeError as error:
 
         raise ValueError(
-            "AI response could not "
-            "be converted to product data."
-        )
+            "Gemini returned product data "
+            "that could not be read. "
+            "Please try again."
+        ) from error
 
-    products = []
 
     if not isinstance(
         data,
         list
     ):
-        return products
+
+        raise ValueError(
+            "Gemini did not return "
+            "a product list."
+        )
+
+
+    # ======================================
+    # CLEAN PRODUCTS
+    # ======================================
+
+    products = []
+
 
     for item in data:
 
-        if not isinstance(
-            item,
-            dict
-        ):
-            continue
+        product = normalize_product(
+            item
+        )
 
-        name = str(
-            item.get(
-                "name",
-                ""
+        if product is not None:
+
+            products.append(
+                product
             )
-        ).strip()
 
-        price = safe_float(
-            item.get(
-                "price"
-            )
-        )
-
-        if (
-            not name
-            or price is None
-            or price <= 0
-        ):
-            continue
-
-        quantity = safe_float(
-            item.get(
-                "quantity"
-            ),
-            1
-        )
-
-        if (
-            quantity is None
-            or quantity <= 0
-        ):
-            quantity = 1
-
-        package_count = (
-            safe_int(
-                item.get(
-                    "package_count"
-                ),
-                1
-            )
-        )
-
-        unit = str(
-            item.get(
-                "unit",
-                "piece"
-            )
-        ).strip()
-
-        unit_map = {
-
-            "l": "L",
-            "liter": "L",
-            "litre": "L",
-            "لتر": "L",
-
-            "ml": "ml",
-            "مل": "ml",
-
-            "kg": "kg",
-            "kilogram": "kg",
-            "كيلو": "kg",
-
-            "g": "g",
-            "gram": "g",
-            "جرام": "g",
-
-            "piece": "piece",
-            "pieces": "piece",
-            "قطعة": "piece",
-            "قطعه": "piece",
-
-            "pack": "pack",
-            "packs": "pack",
-            "عبوة": "pack",
-            "عبوه": "pack"
-        }
-
-        unit = unit_map.get(
-            unit.lower(),
-            unit
-        )
-
-        products.append(
-            {
-
-                "name": name,
-
-                "brand": str(
-                    item.get(
-                        "brand",
-                        ""
-                    )
-                ).strip(),
-
-                "price": price,
-
-                "old_price":
-                    safe_float(
-                        item.get(
-                            "old_price"
-                        )
-                    ),
-
-                "quantity":
-                    quantity,
-
-                "unit":
-                    unit,
-
-                "package_count":
-                    package_count,
-
-                "notes":
-                    str(
-                        item.get(
-                            "notes",
-                            ""
-                        )
-                    ).strip()
-            }
-        )
 
     return products
 
 
-# ---------------------------------------
-# Main extraction
-# ---------------------------------------
+# ==========================================
+# PUBLIC FUNCTION
+# ==========================================
 
-def extract_products(
-    image
+def extract_offer_products(
+    files
 ):
 
-    optimized = (
-        optimize_image(
-            image
+    if not files:
+        return []
+
+
+    optimized_images = []
+
+
+    # Optimize every uploaded page
+    for file in files:
+
+        file_bytes = (
+            file.getvalue()
         )
+
+        optimized_bytes = (
+            optimize_image_bytes(
+                file_bytes
+            )
+        )
+
+        optimized_images.append(
+            optimized_bytes
+        )
+
+
+    # Tuple makes the input cacheable
+    images_tuple = tuple(
+        optimized_images
     )
 
-    image_bytes = (
-        image_to_bytes(
-            optimized
-        )
-    )
 
-    return (
-        extract_products_cached(
-            image_bytes
-        )
+    # ONE cached Gemini request
+    # for the whole supermarket offer
+    return extract_offer_products_cached(
+        images_tuple
     )
