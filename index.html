@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>مقارنة العروض</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+    <main class="app">
+
+        <!-- ========================= -->
+        <!-- HEADER -->
+        <!-- ========================= -->
+
+        <header class="hero">
+
+            <div class="logo">
+                🛒
+            </div>
+
+            <div>
+
+                <h1>
+                    مقارنة العروض
+                </h1>
+
+                <p>
+                    قارن بين أسعار المنتجات
+                    حسب السعر والكمية والحجم
+                </p>
+
+            </div>
+
+        </header>
+
+
+        <!-- ========================= -->
+        <!-- AI STATUS -->
+        <!-- ========================= -->
+
+        <section class="card model-card">
+
+            <div>
+
+                <h2>
+                    🤖 الذكاء الاصطناعي
+                </h2>
+
+                <p id="modelStatus">
+                    جاري تجهيز نموذج الذكاء الاصطناعي...
+                </p>
+
+            </div>
+
+            <div
+                id="modelBadge"
+                class="badge loading"
+            >
+                جاري التحميل
+            </div>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- NUMBER OF OFFERS -->
+        <!-- ========================= -->
+
+        <section class="card">
+
+            <h2>
+                عدد العروض
+            </h2>
+
+            <p class="description">
+                اختاري عدد العروض التي تريدين
+                مقارنتها.
+            </p>
+
+            <label for="offerCount">
+                عدد العروض
+            </label>
+
+            <select id="offerCount">
+
+                <option value="2" selected>
+                    عرضان
+                </option>
+
+                <option value="3">
+                    3 عروض
+                </option>
+
+                <option value="4">
+                    4 عروض
+                </option>
+
+                <option value="5">
+                    5 عروض
+                </option>
+
+                <option value="6">
+                    6 عروض
+                </option>
+
+            </select>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- OFFERS -->
+        <!-- ========================= -->
+
+        <section
+            id="offersContainer"
+            class="offers-container"
+        ></section>
+
+
+        <!-- ========================= -->
+        <!-- COMPARE -->
+        <!-- ========================= -->
+
+        <button
+            id="compareButton"
+            class="compare-button"
+            disabled
+        >
+            🔍 قارن بين العروض
+        </button>
+
+
+        <p
+            id="status"
+            class="status"
+        >
+            جاري تجهيز الذكاء الاصطناعي...
+        </p>
+
+
+        <!-- ========================= -->
+        <!-- SUMMARY -->
+        <!-- ========================= -->
+
+        <section
+            id="summarySection"
+            class="card hidden"
+        >
+
+            <h2>
+                📊 ملخص العروض
+            </h2>
+
+            <div
+                id="summaryContent"
+                class="summary-grid"
+            ></div>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- COMPARISON -->
+        <!-- ========================= -->
+
+        <section
+            id="comparisonSection"
+            class="card hidden"
+        >
+
+            <h2>
+                🏆 مقارنة الأسعار
+            </h2>
+
+            <p class="description">
+                تتم المقارنة حسب سعر الكيلو
+                أو اللتر أو القطعة عندما يكون
+                ذلك ممكنًا.
+            </p>
+
+            <div id="comparisonContent"></div>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- MISSING -->
+        <!-- ========================= -->
+
+        <section
+            id="missingSection"
+            class="card hidden"
+        >
+
+            <h2>
+                ✨ منتجات غير موجودة في بعض العروض
+            </h2>
+
+            <div id="missingContent"></div>
+
+        </section>
+
+
+        <!-- ========================= -->
+        <!-- ALL PRODUCTS -->
+        <!-- ========================= -->
+
+        <section
+            id="productsSection"
+            class="card hidden"
+        >
+
+            <h2>
+                📋 جميع المنتجات المكتشفة
+            </h2>
+
+            <div id="productsContent"></div>
+
+        </section>
+
+    </main>
+
+
+    <script
+        type="module"
+        src="app.js"
+    ></script>
+
+</body>
+
+</html>
