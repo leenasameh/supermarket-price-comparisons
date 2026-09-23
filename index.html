@@ -3,243 +3,293 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <title>وفرلي AI | مقارنة أسعار العروض</title>
 
-    <title>مقارنة العروض</title>
+    <link rel="stylesheet" href="style.css">
 
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
+    <!-- OCR مجاني يعمل داخل المتصفح -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 
 <body>
 
-    <main class="app">
+<header class="navbar">
+    <div class="brand">
+        <div class="brand-icon">AI</div>
 
-        <!-- ========================= -->
-        <!-- HEADER -->
-        <!-- ========================= -->
+        <div>
+            <h2>وفرلي AI</h2>
+            <p>مقارنة ذكية لأسعار العروض</p>
+        </div>
+    </div>
 
-        <header class="hero">
+    <div class="ai-badge">
+        ✨ مدعوم بالذكاء الاصطناعي
+    </div>
+</header>
 
-            <div class="logo">
-                🛒
+
+<main class="container">
+
+    <!-- HERO -->
+
+    <section class="hero">
+
+        <span class="hero-badge">
+            🤖 AI MODEL
+        </span>
+
+        <h1>
+            قارن الأسعار
+            <span>واعرف العرض الأوفر</span>
+        </h1>
+
+        <p>
+            ارفع صور مجلات العروض، وسيقوم النظام بقراءة المنتجات
+            والأسعار والأحجام ومقارنتها تلقائيًا.
+        </p>
+
+    </section>
+
+
+    <!-- UPLOAD -->
+
+    <section class="main-card">
+
+        <div class="section-title">
+            <h2>📸 ارفع مجلات العروض</h2>
+
+            <p>
+                يمكنك رفع صورتين أو أكثر للمقارنة بين المنتجات.
+            </p>
+        </div>
+
+
+        <label class="upload-area" for="imagesInput">
+
+            <div class="upload-icon">
+                ↑
             </div>
 
-            <div>
+            <h3>اضغط لاختيار صور المجلات</h3>
 
-                <h1>
-                    مقارنة العروض
-                </h1>
-
-                <p>
-                    قارن بين أسعار المنتجات
-                    حسب السعر والكمية والحجم
-                </p>
-
-            </div>
-
-        </header>
-
-
-        <!-- ========================= -->
-        <!-- AI STATUS -->
-        <!-- ========================= -->
-
-        <section class="card model-card">
-
-            <div>
-
-                <h2>
-                    🤖 الذكاء الاصطناعي
-                </h2>
-
-                <p id="modelStatus">
-                    جاري تجهيز نموذج الذكاء الاصطناعي...
-                </p>
-
-            </div>
-
-            <div
-                id="modelBadge"
-                class="badge loading"
-            >
-                جاري التحميل
-            </div>
-
-        </section>
-
-
-        <!-- ========================= -->
-        <!-- NUMBER OF OFFERS -->
-        <!-- ========================= -->
-
-        <section class="card">
-
-            <h2>
-                عدد العروض
-            </h2>
-
-            <p class="description">
-                اختاري عدد العروض التي تريدين
-                مقارنتها.
+            <p>
+                JPG - JPEG - PNG
             </p>
 
-            <label for="offerCount">
-                عدد العروض
-            </label>
+            <span class="choose-button">
+                اختيار الصور
+            </span>
 
-            <select id="offerCount">
-
-                <option value="2" selected>
-                    عرضان
-                </option>
-
-                <option value="3">
-                    3 عروض
-                </option>
-
-                <option value="4">
-                    4 عروض
-                </option>
-
-                <option value="5">
-                    5 عروض
-                </option>
-
-                <option value="6">
-                    6 عروض
-                </option>
-
-            </select>
-
-        </section>
+        </label>
 
 
-        <!-- ========================= -->
-        <!-- OFFERS -->
-        <!-- ========================= -->
+        <input
+            type="file"
+            id="imagesInput"
+            accept="image/*"
+            multiple
+            hidden
+        >
 
-        <section
-            id="offersContainer"
-            class="offers-container"
-        ></section>
 
+        <div
+            id="previewContainer"
+            class="preview-container"
+        ></div>
 
-        <!-- ========================= -->
-        <!-- COMPARE -->
-        <!-- ========================= -->
 
         <button
-            id="compareButton"
-            class="compare-button"
+            id="analyzeButton"
+            class="analyze-button"
             disabled
         >
-            🔍 قارن بين العروض
+            ✨ تحليل ومقارنة العروض
         </button>
 
+    </section>
 
-        <p
-            id="status"
-            class="status"
-        >
-            جاري تجهيز الذكاء الاصطناعي...
+
+    <!-- LOADING -->
+
+    <section
+        id="loadingSection"
+        class="loading-card hidden"
+    >
+
+        <div class="spinner"></div>
+
+        <h2>
+            الذكاء الاصطناعي بيحلل المجلات...
+        </h2>
+
+        <p id="loadingText">
+            جاري تجهيز نموذج الذكاء الاصطناعي
         </p>
 
 
-        <!-- ========================= -->
-        <!-- SUMMARY -->
-        <!-- ========================= -->
-
-        <section
-            id="summarySection"
-            class="card hidden"
-        >
-
-            <h2>
-                📊 ملخص العروض
-            </h2>
-
+        <div class="progress">
             <div
-                id="summaryContent"
-                class="summary-grid"
+                id="progressBar"
+                class="progress-bar"
             ></div>
+        </div>
 
-        </section>
+
+        <strong id="progressText">
+            0%
+        </strong>
+
+    </section>
 
 
-        <!-- ========================= -->
+    <!-- RESULTS -->
+
+    <section
+        id="resultsSection"
+        class="hidden"
+    >
+
+        <div class="results-header">
+
+            <div>
+
+                <span class="success-badge">
+                    ✓ تم تحليل المجلات
+                </span>
+
+                <h2>
+                    نتائج مقارنة الأسعار
+                </h2>
+
+                <p>
+                    المقارنة تعتمد على السعر بالنسبة للكمية.
+                </p>
+
+            </div>
+
+
+            <button
+                class="secondary-button"
+                onclick="resetApp()"
+            >
+                مقارنة جديدة
+            </button>
+
+        </div>
+
+
+        <!-- STATISTICS -->
+
+        <div class="stats">
+
+            <div class="stat-card">
+                <span>عدد المجلات</span>
+                <strong id="offersCount">0</strong>
+            </div>
+
+
+            <div class="stat-card">
+                <span>المنتجات المكتشفة</span>
+                <strong id="productsCount">0</strong>
+            </div>
+
+
+            <div class="stat-card">
+                <span>المنتجات المقارنة</span>
+                <strong id="comparedCount">0</strong>
+            </div>
+
+        </div>
+
+
         <!-- COMPARISON -->
-        <!-- ========================= -->
 
-        <section
-            id="comparisonSection"
-            class="card hidden"
-        >
+        <div class="section-heading">
 
             <h2>
-                🏆 مقارنة الأسعار
+                🏆 مقارنة المنتجات
             </h2>
 
-            <p class="description">
-                تتم المقارنة حسب سعر الكيلو
-                أو اللتر أو القطعة عندما يكون
-                ذلك ممكنًا.
+            <p>
+                المنتجات المتشابهة الموجودة في أكثر من مجلة.
             </p>
 
-            <div id="comparisonContent"></div>
-
-        </section>
+        </div>
 
 
-        <!-- ========================= -->
-        <!-- MISSING -->
-        <!-- ========================= -->
+        <div
+            id="comparisonContainer"
+            class="comparison-container"
+        ></div>
 
-        <section
-            id="missingSection"
-            class="card hidden"
-        >
+
+        <!-- UNIQUE PRODUCTS -->
+
+        <div class="section-heading special-heading">
 
             <h2>
-                ✨ منتجات غير موجودة في بعض العروض
+                🛍️ منتجات غير متوفرة للمقارنة
             </h2>
 
-            <div id="missingContent"></div>
+            <p>
+                المنتجات الموجودة في مجلة واحدة فقط.
+            </p>
 
-        </section>
+        </div>
 
 
-        <!-- ========================= -->
+        <div
+            id="uniqueProducts"
+            class="unique-list"
+        ></div>
+
+
         <!-- ALL PRODUCTS -->
-        <!-- ========================= -->
 
-        <section
-            id="productsSection"
-            class="card hidden"
-        >
+        <div class="section-heading">
 
             <h2>
-                📋 جميع المنتجات المكتشفة
+                📦 جميع المنتجات المكتشفة
             </h2>
 
-            <div id="productsContent"></div>
+            <p>
+                جميع المنتجات التي تم قراءتها من المجلات.
+            </p>
 
-        </section>
-
-    </main>
+        </div>
 
 
-    <script
-        type="module"
-        src="app.js"
-    ></script>
+        <div
+            id="allProducts"
+            class="products-grid"
+        ></div>
+
+    </section>
+
+</main>
+
+
+<footer>
+
+    <strong>
+        وفرلي AI
+    </strong>
+
+    <span>
+        مقارنة الأسعار باستخدام الذكاء الاصطناعي
+    </span>
+
+    <small>
+        تتم معالجة الصور داخل المتصفح بدون Backend.
+    </small>
+
+</footer>
+
+
+<script src="app.js"></script>
 
 </body>
-
 </html>
