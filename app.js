@@ -6,11 +6,28 @@ import {
 
 
 /* =========================================================
-   MODEL
+   SETTINGS
 ========================================================= */
 
 const MODEL =
     "HuggingFaceTB/SmolVLM-256M-Instruct";
+
+/*
+    تصغير الصور الكبيرة يسرّع التحليل.
+    1280 مناسب بين السرعة ووضوح الأسعار.
+*/
+const MAX_IMAGE_SIZE = 1280;
+
+/*
+    تقليل عدد الكلمات التي يولدها الموديل
+    يسرّع النتيجة.
+*/
+const MAX_NEW_TOKENS = 350;
+
+
+/* =========================================================
+   MODEL STATE
+========================================================= */
 
 let processor = null;
 let model = null;
@@ -18,30 +35,11 @@ let modelReady = false;
 
 
 /* =========================================================
-   SPEED SETTINGS
+   CACHE
 ========================================================= */
 
-/*
-    كل ما الرقم يقل، السرعة تزيد
-    لكن الصور الصغيرة جدًا ممكن تقلل دقة قراءة الأسعار.
-
-    1280 اختيار متوازن.
-*/
-const MAX_IMAGE_SIZE = 1280;
-
-
-/*
-    تقليل عدد الـtokens يجعل توليد النتيجة أسرع.
-*/
-const MAX_NEW_TOKENS = 350;
-
-
-/*
-    Cache داخل الجلسة الحالية.
-    لو نفس الصورة اتحللت مرة ثانية
-    هنستخدم النتيجة القديمة بدل تشغيل AI من جديد.
-*/
-const analysisCache = new Map();
+const analysisCache =
+    new Map();
 
 
 /* =========================================================
@@ -49,50 +47,78 @@ const analysisCache = new Map();
 ========================================================= */
 
 const offerCount =
-    document.getElementById("offerCount");
+    document.getElementById(
+        "offerCount"
+    );
 
 const offersContainer =
-    document.getElementById("offersContainer");
+    document.getElementById(
+        "offersContainer"
+    );
 
 const compareButton =
-    document.getElementById("compareButton");
+    document.getElementById(
+        "compareButton"
+    );
 
 const status =
-    document.getElementById("status");
+    document.getElementById(
+        "status"
+    );
 
 const modelStatus =
-    document.getElementById("modelStatus");
+    document.getElementById(
+        "modelStatus"
+    );
 
 const modelBadge =
-    document.getElementById("modelBadge");
+    document.getElementById(
+        "modelBadge"
+    );
 
 const summarySection =
-    document.getElementById("summarySection");
+    document.getElementById(
+        "summarySection"
+    );
 
 const summaryContent =
-    document.getElementById("summaryContent");
+    document.getElementById(
+        "summaryContent"
+    );
 
 const comparisonSection =
-    document.getElementById("comparisonSection");
+    document.getElementById(
+        "comparisonSection"
+    );
 
 const comparisonContent =
-    document.getElementById("comparisonContent");
+    document.getElementById(
+        "comparisonContent"
+    );
 
 const missingSection =
-    document.getElementById("missingSection");
+    document.getElementById(
+        "missingSection"
+    );
 
 const missingContent =
-    document.getElementById("missingContent");
+    document.getElementById(
+        "missingContent"
+    );
 
 const productsSection =
-    document.getElementById("productsSection");
+    document.getElementById(
+        "productsSection"
+    );
 
 const productsContent =
-    document.getElementById("productsContent");
+    document.getElementById(
+        "productsContent"
+    );
 
 
 /* =========================================================
-   STATE
+   OFFERS STATE
 ========================================================= */
 
 let offers = [];
@@ -106,24 +132,48 @@ async function loadModel() {
 
     try {
 
+        modelReady = false;
+
+        compareButton.disabled =
+            true;
+
         modelStatus.textContent =
-            "جاري تجهيز الذكاء الاصطناعي...";
+            "جاري تحميل معالج الصور...";
 
         modelBadge.textContent =
             "جاري التحميل";
 
-        console.log("Loading processor...");
+        modelBadge.className =
+            "badge loading";
+
+        status.textContent =
+            "⏳ جاري تجهيز الذكاء الاصطناعي...";
+
+
+        console.log(
+            "Loading processor..."
+        );
+
 
         processor =
             await AutoProcessor.from_pretrained(
                 MODEL
             );
 
-        console.log("Processor loaded ✓");
+
+        console.log(
+            "Processor loaded ✓"
+        );
+
 
         modelStatus.textContent =
             "جاري تحميل نموذج الذكاء الاصطناعي...";
 
+
+        /*
+            نفس إعدادات التحميل التي كانت
+            تعمل عندك قبل تعديل السرعة.
+        */
 
         model =
             await AutoModelForVision2Seq.from_pretrained(
@@ -132,9 +182,14 @@ async function loadModel() {
                     device: "webgpu",
 
                     dtype: {
-                        embed_tokens: "fp32",
-                        vision_encoder: "q4",
-                        decoder_model_merged: "q4"
+                        embed_tokens:
+                            "fp32",
+
+                        vision_encoder:
+                            "q4",
+
+                        decoder_model_merged:
+                            "q4"
                     }
                 }
             );
@@ -142,7 +197,10 @@ async function loadModel() {
 
         modelReady = true;
 
-        console.log("Model ready ✓");
+
+        console.log(
+            "SmolVLM ready ✓"
+        );
 
 
         modelStatus.textContent =
@@ -155,7 +213,8 @@ async function loadModel() {
             "badge ready";
 
         status.textContent =
-            "الذكاء الاصطناعي جاهز ✓ ارفعي صور العروض.";
+            "✅ الذكاء الاصطناعي جاهز. ارفعي صور العروض.";
+
 
         updateCompareButton();
 
@@ -167,7 +226,9 @@ async function loadModel() {
             error
         );
 
+
         modelReady = false;
+
 
         modelStatus.textContent =
             "تعذر تحميل نموذج الذكاء الاصطناعي.";
@@ -178,8 +239,13 @@ async function loadModel() {
         modelBadge.className =
             "badge error";
 
+
         status.textContent =
-            "تأكدي من استخدام Chrome أو Edge حديث.";
+            "❌ حدث خطأ أثناء تحميل الذكاء الاصطناعي. افتحي Console لمعرفة الخطأ.";
+
+
+        compareButton.disabled =
+            true;
 
     }
 
@@ -193,11 +259,15 @@ async function loadModel() {
 function createOffers() {
 
     const count =
-        Number(offerCount.value);
+        Number(
+            offerCount.value
+        );
+
 
     offers = [];
 
-    offersContainer.innerHTML = "";
+    offersContainer.innerHTML =
+        "";
 
 
     for (
@@ -218,7 +288,9 @@ function createOffers() {
         };
 
 
-        offers.push(offer);
+        offers.push(
+            offer
+        );
 
 
         const card =
@@ -237,9 +309,11 @@ function createOffers() {
                 العرض ${index + 1}
             </div>
 
+
             <label>
                 اسم العرض
             </label>
+
 
             <input
                 type="text"
@@ -247,6 +321,7 @@ function createOffers() {
                 value="العرض ${index + 1}"
                 data-index="${index}"
             >
+
 
             <label
                 class="upload-box"
@@ -257,9 +332,11 @@ function createOffers() {
                     📷
                 </div>
 
+
                 <strong>
-                    ارفع صور العرض
+                    ارفعي صور العرض
                 </strong>
+
 
                 <span>
                     يمكنك اختيار أكثر من صورة
@@ -267,6 +344,7 @@ function createOffers() {
                 </span>
 
             </label>
+
 
             <input
                 id="files-${index}"
@@ -277,12 +355,14 @@ function createOffers() {
                 data-index="${index}"
             >
 
+
             <p
                 id="count-${index}"
                 class="file-count"
             >
                 لم يتم اختيار صور
             </p>
+
 
             <div
                 id="preview-${index}"
@@ -307,7 +387,7 @@ function createOffers() {
 
 
 /* =========================================================
-   EVENTS
+   OFFER EVENTS
 ========================================================= */
 
 function addOfferEvents() {
@@ -327,12 +407,16 @@ function addOfferEvents() {
 
                     const index =
                         Number(
-                            event.target.dataset.index
+                            event.target
+                                .dataset
+                                .index
                         );
 
 
                     offers[index].name =
-                        event.target.value.trim()
+                        event.target
+                            .value
+                            .trim()
                         ||
                         `العرض ${index + 1}`;
 
@@ -344,9 +428,10 @@ function addOfferEvents() {
 
 
     const fileInputs =
-        offersContainer.querySelectorAll(
-            'input[type="file"]'
-        );
+        offersContainer
+            .querySelectorAll(
+                'input[type="file"]'
+            );
 
 
     fileInputs.forEach(
@@ -358,7 +443,9 @@ function addOfferEvents() {
 
                     const index =
                         Number(
-                            event.target.dataset.index
+                            event.target
+                                .dataset
+                                .index
                         );
 
 
@@ -370,7 +457,6 @@ function addOfferEvents() {
 
                     offers[index].files =
                         files;
-
 
                     offers[index].products =
                         [];
@@ -394,7 +480,7 @@ function addOfferEvents() {
 
 
 /* =========================================================
-   PREVIEWS
+   IMAGE PREVIEWS
 ========================================================= */
 
 function showPreviews(
@@ -414,7 +500,8 @@ function showPreviews(
         );
 
 
-    preview.innerHTML = "";
+    preview.innerHTML =
+        "";
 
 
     if (
@@ -446,7 +533,7 @@ function showPreviews(
     files.forEach(
         file => {
 
-            const img =
+            const image =
                 document.createElement(
                     "img"
                 );
@@ -458,13 +545,15 @@ function showPreviews(
                 );
 
 
-            img.src = url;
+            image.src =
+                url;
 
-            img.alt =
+
+            image.alt =
                 "معاينة صورة العرض";
 
 
-            img.onload =
+            image.onload =
                 () => {
 
                     URL.revokeObjectURL(
@@ -475,7 +564,7 @@ function showPreviews(
 
 
             preview.appendChild(
-                img
+                image
             );
 
         }
@@ -485,7 +574,7 @@ function showPreviews(
 
 
 /* =========================================================
-   BUTTON
+   BUTTON STATE
 ========================================================= */
 
 function updateCompareButton() {
@@ -508,10 +597,12 @@ function updateCompareButton() {
 
 
 /* =========================================================
-   IMAGE CACHE KEY
+   FILE CACHE KEY
 ========================================================= */
 
-function getFileKey(file) {
+function getFileKey(
+    file
+) {
 
     return [
 
@@ -521,39 +612,54 @@ function getFileKey(file) {
 
         file.lastModified
 
-    ].join("|");
+    ].join(
+        "|"
+    );
 
 }
 
 
 /* =========================================================
    RESIZE IMAGE
-
-   أهم تعديل للسرعة.
 ========================================================= */
 
-async function resizeImage(file) {
-
-    const bitmap =
-        await createImageBitmap(file);
-
-
-    let width =
-        bitmap.width;
-
-    let height =
-        bitmap.height;
-
+async function resizeImage(
+    file
+) {
 
     /*
-        لو الصورة صغيرة بالفعل
-        لا نحتاج تكبيرها.
+        لو المتصفح لا يدعم createImageBitmap
+        نستخدم الصورة الأصلية.
     */
 
     if (
-        width <= MAX_IMAGE_SIZE
+        !window.createImageBitmap
+    ) {
+
+        return file;
+
+    }
+
+
+    const bitmap =
+        await createImageBitmap(
+            file
+        );
+
+
+    const originalWidth =
+        bitmap.width;
+
+    const originalHeight =
+        bitmap.height;
+
+
+    if (
+        originalWidth <=
+            MAX_IMAGE_SIZE
         &&
-        height <= MAX_IMAGE_SIZE
+        originalHeight <=
+            MAX_IMAGE_SIZE
     ) {
 
         bitmap.close();
@@ -565,20 +671,31 @@ async function resizeImage(file) {
 
     const scale =
         Math.min(
-            MAX_IMAGE_SIZE / width,
-            MAX_IMAGE_SIZE / height
+
+            MAX_IMAGE_SIZE
+            /
+            originalWidth,
+
+            MAX_IMAGE_SIZE
+            /
+            originalHeight
+
         );
 
 
-    width =
+    const width =
         Math.round(
-            width * scale
+            originalWidth
+            *
+            scale
         );
 
 
-    height =
+    const height =
         Math.round(
-            height * scale
+            originalHeight
+            *
+            scale
         );
 
 
@@ -588,9 +705,11 @@ async function resizeImage(file) {
         );
 
 
-    canvas.width = width;
+    canvas.width =
+        width;
 
-    canvas.height = height;
+    canvas.height =
+        height;
 
 
     const context =
@@ -603,11 +722,15 @@ async function resizeImage(file) {
 
 
     context.drawImage(
+
         bitmap,
+
         0,
         0,
+
         width,
         height
+
     );
 
 
@@ -619,9 +742,13 @@ async function resizeImage(file) {
             resolve => {
 
                 canvas.toBlob(
+
                     resolve,
+
                     "image/jpeg",
-                    0.88
+
+                    0.9
+
                 );
 
             }
@@ -634,27 +761,31 @@ async function resizeImage(file) {
 
 
 /* =========================================================
-   PROMPT
+   AI PROMPT
 ========================================================= */
 
 function buildPrompt() {
 
     return `
-Read this supermarket promotional flyer.
+You are an expert supermarket promotional flyer reader.
+
+Carefully analyze this flyer image.
 
 Extract every clearly visible product that has
-a readable CURRENT price.
+a readable CURRENT promotional price.
 
-Return ONLY valid JSON.
-No markdown.
-No explanation.
+Return ONLY a valid JSON array.
 
-Format:
+Do not use markdown.
+Do not write explanations.
+Do not write anything before or after the JSON.
+
+Use this structure:
 
 [
   {
     "name": "product name",
-    "brand": "brand",
+    "brand": "brand name",
     "price": 45,
     "old_price": null,
     "quantity": 1,
@@ -664,50 +795,64 @@ Format:
   }
 ]
 
-Rules:
+LANGUAGE RULES:
 
-Keep Arabic names in Arabic.
-Keep English names in English.
-Never translate brand names.
+- Keep Arabic product names in Arabic.
+- Keep English product names in English.
+- Never translate brand names.
+- Write notes in Arabic when needed.
 
-price = current promotional price.
-old_price = crossed-out old price or null.
+PRICE RULES:
 
-Do not guess unreadable prices.
+- price = CURRENT promotional price.
+- old_price = old crossed-out price.
+- If there is no old price use null.
+- Never guess unreadable prices.
+- Do not confuse discount percentage with price.
 
-quantity = quantity in one package.
+QUANTITY RULES:
+
+quantity = quantity in ONE package.
 
 package_count = number of packages included
 in the displayed price.
 
 Examples:
 
-1 L:
-quantity=1
-unit="L"
-package_count=1
+Milk 1 L:
+quantity = 1
+unit = "L"
+package_count = 1
 
-1.5 L:
-quantity=1.5
-unit="L"
-package_count=1
+Oil 1.5 L:
+quantity = 1.5
+unit = "L"
+package_count = 1
 
 2 x 1 L:
-quantity=1
-unit="L"
-package_count=2
+quantity = 1
+unit = "L"
+package_count = 2
 
 6 x 330 ml:
-quantity=330
-unit="ml"
-package_count=6
+quantity = 330
+unit = "ml"
+package_count = 6
 
-750g + 250g free:
-quantity=1000
-unit="g"
-package_count=1
+750g + 250g FREE:
+quantity = 1000
+unit = "g"
+package_count = 1
+notes = "750 جم + 250 جم مجانًا"
+
+Buy 2 Get 1 Free:
+quantity = 1
+unit = "piece"
+package_count = 3
+notes = "اشترِ 2 واحصل على 1 مجانًا"
 
 Allowed units:
+
 kg
 g
 L
@@ -715,23 +860,29 @@ ml
 piece
 pack
 
-If size is unknown:
-quantity=1
-unit="piece"
-package_count=1
+If product size cannot be determined:
 
-Ignore:
-store names,
-headings,
-dates,
-addresses,
-phone numbers,
-QR codes,
-advertising text.
+quantity = 1
+unit = "piece"
+package_count = 1
 
-Only include products with readable current prices.
+Do NOT extract:
 
-JSON only.
+- store names
+- supermarket names
+- headings
+- category names
+- dates
+- phone numbers
+- addresses
+- QR codes
+- slogans
+- decorative text
+
+Only include products with a clearly readable
+current promotional price.
+
+Return JSON only.
 `;
 
 }
@@ -745,13 +896,16 @@ async function analyzeImage(
     file
 ) {
 
-    /*
-        هل حللنا الصورة قبل كده؟
-    */
-
     const cacheKey =
-        getFileKey(file);
+        getFileKey(
+            file
+        );
 
+
+    /*
+        لو الصورة اتحللت قبل كده
+        نرجع النتيجة فورًا.
+    */
 
     if (
         analysisCache.has(
@@ -760,13 +914,13 @@ async function analyzeImage(
     ) {
 
         console.log(
-            "Using cached result:",
+            "Using cache:",
             file.name
         );
 
 
         status.textContent =
-            `⚡ تم العثور على تحليل محفوظ للصورة ${file.name}`;
+            "⚡ تم استخدام تحليل محفوظ للصورة.";
 
 
         return structuredClone(
@@ -778,20 +932,21 @@ async function analyzeImage(
     }
 
 
-    let imageUrl = null;
+    let imageUrl =
+        null;
 
 
     try {
 
+        status.textContent =
+            "⚡ جاري تجهيز الصورة للتحليل...";
+
+
         /*
-            تصغير الصورة أولاً.
+            تصغير الصورة الكبيرة.
         */
 
-        status.textContent =
-            `⚡ جاري تجهيز الصورة ${file.name}...`;
-
-
-        const optimizedImage =
+        const optimizedFile =
             await resizeImage(
                 file
             );
@@ -799,7 +954,7 @@ async function analyzeImage(
 
         imageUrl =
             URL.createObjectURL(
-                optimizedImage
+                optimizedFile
             );
 
 
@@ -823,7 +978,8 @@ async function analyzeImage(
 
                     {
                         type: "text",
-                        text: buildPrompt()
+                        text:
+                            buildPrompt()
                     }
 
                 ]
@@ -835,27 +991,34 @@ async function analyzeImage(
 
         const text =
             processor.apply_chat_template(
+
                 messages,
+
                 {
                     add_generation_prompt:
                         true
                 }
+
             );
 
 
         const inputs =
             await processor(
+
                 text,
+
                 [image],
+
                 {
-                    /*
-                        أسرع من image splitting
-                        للصور العادية.
-                    */
                     do_image_splitting:
                         false
                 }
+
             );
+
+
+        status.textContent =
+            "🤖 جاري قراءة المنتجات والأسعار...";
 
 
         const generatedIds =
@@ -876,48 +1039,62 @@ async function analyzeImage(
 
         const output =
             processor.batch_decode(
+
                 generatedIds,
+
                 {
                     skip_special_tokens:
                         true
                 }
+
             );
 
 
-        let result =
-            output[0] || "";
+        const rawResult =
+            output[0]
+            ||
+            "";
 
 
         console.log(
-            "Raw result:",
-            result
+            "Raw AI result:",
+            rawResult
         );
 
 
-        result =
+        const jsonText =
             extractJsonText(
-                result
+                rawResult
             );
 
 
-        let products = [];
+        console.log(
+            "Extracted JSON:",
+            jsonText
+        );
+
+
+        let products =
+            [];
 
 
         try {
 
             products =
                 JSON.parse(
-                    result
+                    jsonText
                 );
 
         } catch (error) {
 
             console.warn(
-                "Invalid JSON:",
-                result
+                "JSON parsing failed:",
+                error
             );
 
-            products = [];
+
+            products =
+                [];
 
         }
 
@@ -928,30 +1105,36 @@ async function analyzeImage(
             )
         ) {
 
-            products = [];
+            products =
+                [];
 
         }
 
 
         products =
             products
+
                 .map(
                     cleanProduct
                 )
+
                 .filter(
                     Boolean
                 );
 
 
         /*
-            حفظ النتيجة في الـcache.
+            حفظ النتيجة.
         */
 
         analysisCache.set(
+
             cacheKey,
+
             structuredClone(
                 products
             )
+
         );
 
 
@@ -971,7 +1154,9 @@ async function analyzeImage(
 
     } finally {
 
-        if (imageUrl) {
+        if (
+            imageUrl
+        ) {
 
             URL.revokeObjectURL(
                 imageUrl
@@ -988,7 +1173,9 @@ async function analyzeImage(
    EXTRACT JSON
 ========================================================= */
 
-function extractJsonText(text) {
+function extractJsonText(
+    text
+) {
 
     if (!text) {
 
@@ -997,38 +1184,49 @@ function extractJsonText(text) {
     }
 
 
-    text =
+    let cleaned =
         text
+
             .replace(
                 /```json/gi,
                 ""
             )
+
             .replace(
                 /```/g,
                 ""
             )
+
             .trim();
 
 
-    const start =
-        text.indexOf("[");
+    const firstBracket =
+        cleaned.indexOf(
+            "["
+        );
 
 
-    const end =
-        text.lastIndexOf("]");
+    const lastBracket =
+        cleaned.lastIndexOf(
+            "]"
+        );
 
 
     if (
-        start !== -1
+        firstBracket !== -1
         &&
-        end !== -1
+        lastBracket !== -1
         &&
-        end > start
+        lastBracket >
+            firstBracket
     ) {
 
-        return text.slice(
-            start,
-            end + 1
+        return cleaned.slice(
+
+            firstBracket,
+
+            lastBracket + 1
+
         );
 
     }
@@ -1040,7 +1238,7 @@ function extractJsonText(text) {
 
 
 /* =========================================================
-   NUMBER
+   SAFE NUMBER
 ========================================================= */
 
 function safeNumber(
@@ -1062,13 +1260,22 @@ function safeNumber(
 
 
     const normalized =
-        String(value)
-            .replace(",", ".")
+        String(
+            value
+        )
+
+            .replace(
+                ",",
+                "."
+            )
+
             .trim();
 
 
     const number =
-        Number(normalized);
+        Number(
+            normalized
+        );
 
 
     if (
@@ -1091,12 +1298,15 @@ function safeNumber(
    CLEAN PRODUCT
 ========================================================= */
 
-function cleanProduct(product) {
+function cleanProduct(
+    product
+) {
 
     if (
         !product
         ||
-        typeof product !== "object"
+        typeof product !==
+            "object"
     ) {
 
         return null;
@@ -1106,14 +1316,19 @@ function cleanProduct(product) {
 
     const name =
         String(
-            product.name || ""
+            product.name
+            ||
+            ""
         ).trim();
 
 
     const price =
         safeNumber(
+
             product.price,
+
             null
+
         );
 
 
@@ -1132,8 +1347,11 @@ function cleanProduct(product) {
 
     let quantity =
         safeNumber(
+
             product.quantity,
+
             1
+
         );
 
 
@@ -1148,8 +1366,11 @@ function cleanProduct(product) {
 
     let packageCount =
         safeNumber(
+
             product.package_count,
+
             1
+
         );
 
 
@@ -1170,57 +1391,101 @@ function cleanProduct(product) {
 
     let unit =
         String(
-            product.unit || "piece"
+            product.unit
+            ||
+            "piece"
         )
+
             .trim()
+
             .toLowerCase();
 
 
     const unitMap = {
 
         "l": "L",
+
         "liter": "L",
+
         "litre": "L",
+
+        "liters": "L",
+
+        "litres": "L",
+
         "لتر": "L",
 
+
         "ml": "ml",
+
+        "milliliter": "ml",
+
+        "milliliters": "ml",
+
         "مل": "ml",
 
+
         "kg": "kg",
+
         "kilogram": "kg",
+
+        "kilograms": "kg",
+
         "كيلو": "kg",
+
         "كيلوجرام": "kg",
 
+
         "g": "g",
+
         "gram": "g",
+
+        "grams": "g",
+
         "جرام": "g",
+
         "جم": "g",
 
+
         "piece": "piece",
+
         "pieces": "piece",
+
         "pc": "piece",
+
         "pcs": "piece",
+
         "قطعة": "piece",
+
         "قطعه": "piece",
 
+
         "pack": "pack",
+
         "packs": "pack",
+
         "عبوة": "pack",
+
         "عبوه": "pack"
 
     };
 
 
     unit =
-        unitMap[unit]
+        unitMap[
+            unit
+        ]
         ||
         "piece";
 
 
     const oldPrice =
         safeNumber(
+
             product.old_price,
+
             null
+
         );
 
 
@@ -1230,18 +1495,25 @@ function cleanProduct(product) {
 
         brand:
             String(
-                product.brand || ""
+                product.brand
+                ||
+                ""
             ).trim(),
 
         price,
 
         old_price:
+
             oldPrice !== null
             &&
             oldPrice > 0
+
                 ?
+
                 oldPrice
+
                 :
+
                 null,
 
         quantity,
@@ -1253,7 +1525,9 @@ function cleanProduct(product) {
 
         notes:
             String(
-                product.notes || ""
+                product.notes
+                ||
+                ""
             ).trim()
 
     };
@@ -1269,26 +1543,30 @@ async function analyzeOffer(
     offer
 ) {
 
-    const allProducts = [];
+    const allProducts =
+        [];
 
 
     for (
         let pageIndex = 0;
-        pageIndex < offer.files.length;
+        pageIndex <
+            offer.files.length;
         pageIndex++
     ) {
 
         status.textContent =
             `🤖 جاري تحليل ${offer.name} — الصورة `
             +
-            `${pageIndex + 1} من ${offer.files.length}`;
+            `${pageIndex + 1} من ${offer.files.length}...`;
 
 
         const products =
             await analyzeImage(
+
                 offer.files[
                     pageIndex
                 ]
+
             );
 
 
@@ -1342,11 +1620,15 @@ function removeDuplicates(
 
                 product.package_count
 
-            ].join("|");
+            ].join(
+                "|"
+            );
 
 
         if (
-            seen.has(key)
+            seen.has(
+                key
+            )
         ) {
 
             continue;
@@ -1354,9 +1636,14 @@ function removeDuplicates(
         }
 
 
-        seen.add(key);
+        seen.add(
+            key
+        );
 
-        result.push(product);
+
+        result.push(
+            product
+        );
 
     }
 
@@ -1370,10 +1657,14 @@ function removeDuplicates(
    NORMALIZE TEXT
 ========================================================= */
 
-function normalizeText(text) {
+function normalizeText(
+    text
+) {
 
     return String(
-        text || ""
+        text
+        ||
+        ""
     )
 
         .toLowerCase()
@@ -1427,13 +1718,23 @@ function normalizeText(text) {
    WORDS
 ========================================================= */
 
-function getWords(text) {
+function getWords(
+    text
+) {
 
     return new Set(
 
-        normalizeText(text)
-            .split(" ")
-            .filter(Boolean)
+        normalizeText(
+            text
+        )
+
+            .split(
+                " "
+            )
+
+            .filter(
+                Boolean
+            )
 
     );
 
@@ -1482,17 +1783,25 @@ function similarity(
 
 
     const wordsA =
-        getWords(nameA);
+        getWords(
+            nameA
+        );
 
 
     const wordsB =
-        getWords(nameB);
+        getWords(
+            nameB
+        );
 
 
     const intersection =
-        [...wordsA].filter(
+        [
+            ...wordsA
+        ].filter(
             word =>
-                wordsB.has(word)
+                wordsB.has(
+                    word
+                )
         );
 
 
@@ -1507,7 +1816,9 @@ function similarity(
 
     let score =
         union.size
+
             ?
+
             (
                 intersection.length
                 /
@@ -1515,14 +1826,20 @@ function similarity(
             )
             *
             100
+
             :
+
             0;
 
 
     if (
-        nameA.includes(nameB)
+        nameA.includes(
+            nameB
+        )
         ||
-        nameB.includes(nameA)
+        nameB.includes(
+            nameA
+        )
     ) {
 
         score =
@@ -1574,9 +1891,12 @@ function similarity(
 
 function groupProducts() {
 
-    const groups = [];
+    const groups =
+        [];
 
-    const threshold = 55;
+
+    const threshold =
+        55;
 
 
     offers.forEach(
@@ -1590,6 +1910,7 @@ function groupProducts() {
 
                     let bestGroup =
                         null;
+
 
                     let bestScore =
                         0;
@@ -1609,33 +1930,38 @@ function groupProducts() {
                             }
 
 
-                            Object.values(
-                                group.products
-                            ).forEach(
-                                existing => {
+                            Object
+                                .values(
+                                    group.products
+                                )
+                                .forEach(
+                                    existing => {
 
-                                    const score =
-                                        similarity(
-                                            product,
-                                            existing
-                                        );
+                                        const score =
+                                            similarity(
+
+                                                product,
+
+                                                existing
+
+                                            );
 
 
-                                    if (
-                                        score >
-                                        bestScore
-                                    ) {
+                                        if (
+                                            score >
+                                                bestScore
+                                        ) {
 
-                                        bestScore =
-                                            score;
+                                            bestScore =
+                                                score;
 
-                                        bestGroup =
-                                            group;
+                                            bestGroup =
+                                                group;
+
+                                        }
 
                                     }
-
-                                }
-                            );
+                                );
 
                         }
                     );
@@ -1648,10 +1974,11 @@ function groupProducts() {
                             threshold
                     ) {
 
-                        bestGroup.products[
-                            offerIndex
-                        ] =
-                            product;
+                        bestGroup
+                            .products[
+                                offerIndex
+                            ] =
+                                product;
 
                     }
 
@@ -1691,7 +2018,9 @@ function groupProducts() {
    UNIT PRICE
 ========================================================= */
 
-function getUnitPrice(product) {
+function getUnitPrice(
+    product
+) {
 
     const total =
         product.quantity
@@ -1708,11 +2037,15 @@ function getUnitPrice(product) {
 
 
     if (
-        product.unit === "kg"
+        product.unit ===
+        "kg"
     ) {
 
         baseQuantity =
-            total * 1000;
+            total
+            *
+            1000;
+
 
         baseUnit =
             "g";
@@ -1721,11 +2054,15 @@ function getUnitPrice(product) {
 
 
     if (
-        product.unit === "L"
+        product.unit ===
+        "L"
     ) {
 
         baseQuantity =
-            total * 1000;
+            total
+            *
+            1000;
+
 
         baseUnit =
             "ml";
@@ -1770,28 +2107,31 @@ function buildComparison() {
     return groups.map(
         group => {
 
-            const unitPrices = {};
+            const unitPrices =
+                {};
 
 
-            Object.entries(
-                group.products
-            ).forEach(
-                (
-                    [
-                        offerIndex,
-                        product
-                    ]
-                ) => {
-
-                    unitPrices[
-                        offerIndex
-                    ] =
-                        getUnitPrice(
+            Object
+                .entries(
+                    group.products
+                )
+                .forEach(
+                    (
+                        [
+                            offerIndex,
                             product
-                        );
+                        ]
+                    ) => {
 
-                }
-            );
+                        unitPrices[
+                            offerIndex
+                        ] =
+                            getUnitPrice(
+                                product
+                            );
+
+                    }
+                );
 
 
             const entries =
@@ -1809,7 +2149,8 @@ function buildComparison() {
 
 
             if (
-                entries.length >= 2
+                entries.length >=
+                2
             ) {
 
                 const units =
@@ -1824,7 +2165,8 @@ function buildComparison() {
 
 
                 if (
-                    units.size === 1
+                    units.size ===
+                    1
                 ) {
 
                     comparable =
@@ -1844,6 +2186,7 @@ function buildComparison() {
 
                     winnerIndices =
                         entries
+
                             .filter(
                                 (
                                     [, data]
@@ -1856,9 +2199,14 @@ function buildComparison() {
                                     <
                                     0.000001
                             )
+
                             .map(
-                                ([index]) =>
-                                    Number(index)
+                                (
+                                    [index]
+                                ) =>
+                                    Number(
+                                        index
+                                    )
                             );
 
                 }
@@ -1893,7 +2241,9 @@ function buildComparison() {
    UNIT PRICE TEXT
 ========================================================= */
 
-function unitPriceText(data) {
+function unitPriceText(
+    data
+) {
 
     if (!data) {
 
@@ -1903,65 +2253,106 @@ function unitPriceText(data) {
 
 
     if (
-        data.unit === "g"
+        data.unit ===
+        "g"
     ) {
 
         return (
+
             (
-                data.value * 1000
-            ).toFixed(2)
+                data.value
+                *
+                1000
+            ).toFixed(
+                2
+            )
+
             +
+
             " جنيه / كجم"
+
         );
 
     }
 
 
     if (
-        data.unit === "ml"
+        data.unit ===
+        "ml"
     ) {
 
         return (
+
             (
-                data.value * 1000
-            ).toFixed(2)
+                data.value
+                *
+                1000
+            ).toFixed(
+                2
+            )
+
             +
+
             " جنيه / لتر"
+
         );
 
     }
 
 
     if (
-        data.unit === "piece"
+        data.unit ===
+        "piece"
     ) {
 
         return (
-            data.value.toFixed(2)
+
+            data.value
+                .toFixed(
+                    2
+                )
+
             +
+
             " جنيه / قطعة"
+
         );
 
     }
 
 
     if (
-        data.unit === "pack"
+        data.unit ===
+        "pack"
     ) {
 
         return (
-            data.value.toFixed(2)
+
+            data.value
+                .toFixed(
+                    2
+                )
+
             +
+
             " جنيه / عبوة"
+
         );
 
     }
 
 
     return (
-        data.value.toFixed(2)
+
+        data.value
+            .toFixed(
+                2
+            )
+
         +
+
         ` جنيه / ${data.unit}`
+
     );
 
 }
@@ -1971,7 +2362,9 @@ function unitPriceText(data) {
    ARABIC UNIT
 ========================================================= */
 
-function arabicUnit(unit) {
+function arabicUnit(
+    unit
+) {
 
     const units = {
 
@@ -1990,7 +2383,11 @@ function arabicUnit(unit) {
     };
 
 
-    return units[unit] || unit;
+    return units[
+        unit
+    ]
+    ||
+    unit;
 
 }
 
@@ -1999,7 +2396,9 @@ function arabicUnit(unit) {
    PACKAGE TEXT
 ========================================================= */
 
-function packageText(product) {
+function packageText(
+    product
+) {
 
     const unit =
         arabicUnit(
@@ -2008,24 +2407,31 @@ function packageText(product) {
 
 
     if (
-        product.package_count > 1
+        product.package_count >
+        1
     ) {
 
         return (
+
             `${product.package_count} × `
+
             +
+
             `${formatNumber(
                 product.quantity
             )} ${unit}`
+
         );
 
     }
 
 
     return (
+
         `${formatNumber(
             product.quantity
         )} ${unit}`
+
     );
 
 }
@@ -2035,22 +2441,32 @@ function packageText(product) {
    FORMAT NUMBER
 ========================================================= */
 
-function formatNumber(value) {
+function formatNumber(
+    value
+) {
 
     const number =
-        Number(value);
+        Number(
+            value
+        );
 
 
     if (
-        Number.isInteger(number)
+        Number.isInteger(
+            number
+        )
     ) {
 
-        return String(number);
+        return String(
+            number
+        );
 
     }
 
 
-    return String(number);
+    return String(
+        number
+    );
 
 }
 
@@ -2059,10 +2475,14 @@ function formatNumber(value) {
    ESCAPE HTML
 ========================================================= */
 
-function escapeHtml(value) {
+function escapeHtml(
+    value
+) {
 
     return String(
-        value ?? ""
+        value
+        ??
+        ""
     )
 
         .replaceAll(
@@ -2105,9 +2525,11 @@ function productHtml(
     if (!product) {
 
         return `
+
             <p class="not-found">
                 ❌ غير موجود
             </p>
+
         `;
 
     }
@@ -2115,23 +2537,32 @@ function productHtml(
 
     const brand =
         product.brand
+
             ?
+
             `
+
                 <p>
                     🏷️ الماركة:
                     ${escapeHtml(
                         product.brand
                     )}
                 </p>
+
             `
+
             :
+
             "";
 
 
     const oldPrice =
         product.old_price
+
             ?
+
             `
+
                 <p>
                     🏷️ السعر القديم:
                     ${formatNumber(
@@ -2139,71 +2570,104 @@ function productHtml(
                     )}
                     جنيه
                 </p>
+
             `
+
             :
+
             "";
 
 
     const unitPrice =
         unitData
+
             ?
+
             `
+
                 <p>
+
                     📊 سعر الوحدة:
+
                     <strong>
                         ${unitPriceText(
                             unitData
                         )}
                     </strong>
+
                 </p>
+
             `
+
             :
+
             "";
 
 
     const notes =
         product.notes
+
             ?
+
             `
+
                 <p>
                     ℹ️
                     ${escapeHtml(
                         product.notes
                     )}
                 </p>
+
             `
+
             :
+
             "";
 
 
     return `
 
         <strong class="product-name">
+
             ${escapeHtml(
                 product.name
             )}
+
         </strong>
+
 
         ${brand}
 
+
         <p>
+
             💰 السعر:
+
             <strong>
+
                 ${formatNumber(
                     product.price
                 )}
+
                 جنيه
+
             </strong>
+
         </p>
 
+
         <p>
+
             📦 الحجم:
+
             ${escapeHtml(
                 packageText(
                     product
                 )
             )}
+
         </p>
+
 
         ${unitPrice}
 
@@ -2222,7 +2686,8 @@ function productHtml(
 
 function displaySummary() {
 
-    summaryContent.innerHTML = "";
+    summaryContent.innerHTML =
+        "";
 
 
     offers.forEach(
@@ -2241,14 +2706,20 @@ function displaySummary() {
             box.innerHTML = `
 
                 <strong>
+
                     ${escapeHtml(
                         offer.name
                     )}
+
                 </strong>
 
+
                 <div class="summary-number">
+
                     ${offer.products.length}
+
                 </div>
+
 
                 <span>
                     منتج مكتشف
@@ -2265,9 +2736,11 @@ function displaySummary() {
     );
 
 
-    summarySection.classList.remove(
-        "hidden"
-    );
+    summarySection
+        .classList
+        .remove(
+            "hidden"
+        );
 
 }
 
@@ -2276,13 +2749,17 @@ function displaySummary() {
    DISPLAY COMPARISON
 ========================================================= */
 
-function displayComparison(results) {
+function displayComparison(
+    results
+) {
 
-    comparisonContent.innerHTML = "";
+    comparisonContent.innerHTML =
+        "";
 
 
     if (
-        results.length === 0
+        results.length ===
+        0
     ) {
 
         comparisonContent.innerHTML = `
@@ -2299,9 +2776,11 @@ function displayComparison(results) {
         `;
 
 
-        comparisonSection.classList.remove(
-            "hidden"
-        );
+        comparisonSection
+            .classList
+            .remove(
+                "hidden"
+            );
 
 
         return;
@@ -2322,7 +2801,8 @@ function displayComparison(results) {
                 "comparison-item";
 
 
-            let offersHtml = "";
+            let offersHtml =
+                "";
 
 
             offers.forEach(
@@ -2348,10 +2828,13 @@ function displayComparison(results) {
                         <div class="product-box">
 
                             <h4>
+
                                 ${escapeHtml(
                                     offer.name
                                 )}
+
                             </h4>
+
 
                             ${productHtml(
                                 product,
@@ -2366,17 +2849,21 @@ function displayComparison(results) {
             );
 
 
-            let resultHtml = "";
+            let resultHtml =
+                "";
 
 
             if (
                 result.comparable
                 &&
-                result.winnerIndices.length === 1
+                result.winnerIndices.length ===
+                    1
             ) {
 
                 const winner =
-                    result.winnerIndices[0];
+                    result.winnerIndices[
+                        0
+                    ];
 
 
                 resultHtml = `
@@ -2386,11 +2873,13 @@ function displayComparison(results) {
                         ⭐ أفضل قيمة:
 
                         <strong>
+
                             ${escapeHtml(
                                 offers[
                                     winner
                                 ].name
                             )}
+
                         </strong>
 
                         —
@@ -2410,22 +2899,29 @@ function displayComparison(results) {
             else if (
                 result.comparable
                 &&
-                result.winnerIndices.length > 1
+                result.winnerIndices.length >
+                    1
             ) {
 
                 const names =
                     result.winnerIndices
+
                         .map(
                             index =>
                                 offers[
                                     index
                                 ].name
                         )
-                        .join("، ");
+
+                        .join(
+                            "، "
+                        );
 
 
                 const first =
-                    result.winnerIndices[0];
+                    result.winnerIndices[
+                        0
+                    ];
 
 
                 resultHtml = `
@@ -2435,9 +2931,11 @@ function displayComparison(results) {
                         ⭐ نفس أفضل قيمة في:
 
                         <strong>
+
                             ${escapeHtml(
                                 names
                             )}
+
                         </strong>
 
                         —
@@ -2455,7 +2953,8 @@ function displayComparison(results) {
             }
 
             else if (
-                result.foundCount === 1
+                result.foundCount ===
+                1
             ) {
 
                 const onlyIndex =
@@ -2490,8 +2989,9 @@ function displayComparison(results) {
 
                     <div class="compare-warning">
 
-                        ⚠️ لا يمكن مقارنة
-                        الوحدات مباشرة.
+                        ⚠️ تم العثور على المنتج
+                        في أكثر من عرض، لكن لا يمكن
+                        مقارنة الوحدات مباشرة.
 
                     </div>
 
@@ -2503,20 +3003,28 @@ function displayComparison(results) {
             item.innerHTML = `
 
                 <div class="comparison-title">
+
                     ${escapeHtml(
                         result.name
                     )}
+
                 </div>
+
 
                 <div class="found-count">
 
                     موجود في
+
                     ${result.foundCount}
+
                     من
+
                     ${offers.length}
+
                     عروض
 
                 </div>
+
 
                 <div class="offer-comparison-grid">
 
@@ -2524,33 +3032,40 @@ function displayComparison(results) {
 
                 </div>
 
+
                 ${resultHtml}
 
             `;
 
 
-            comparisonContent.appendChild(
-                item
-            );
+            comparisonContent
+                .appendChild(
+                    item
+                );
 
         }
     );
 
 
-    comparisonSection.classList.remove(
-        "hidden"
-    );
+    comparisonSection
+        .classList
+        .remove(
+            "hidden"
+        );
 
 }
 
 
 /* =========================================================
-   MISSING
+   DISPLAY MISSING
 ========================================================= */
 
-function displayMissing(results) {
+function displayMissing(
+    results
+) {
 
-    missingContent.innerHTML = "";
+    missingContent.innerHTML =
+        "";
 
 
     const missing =
@@ -2562,7 +3077,8 @@ function displayMissing(results) {
 
 
     if (
-        missing.length === 0
+        missing.length ===
+        0
     ) {
 
         missingContent.innerHTML = `
@@ -2582,9 +3098,12 @@ function displayMissing(results) {
     missing.forEach(
         result => {
 
-            const found = [];
+            const found =
+                [];
 
-            const notFound = [];
+
+            const notFound =
+                [];
 
 
             offers.forEach(
@@ -2630,39 +3149,56 @@ function displayMissing(results) {
             item.innerHTML = `
 
                 <strong>
+
                     ${escapeHtml(
                         result.name
                     )}
+
                 </strong>
 
-                <p>
-                    ✅ موجود في:
-                    ${escapeHtml(
-                        found.join("، ")
-                    )}
-                </p>
 
                 <p>
-                    ❌ غير موجود في:
+
+                    ✅ موجود في:
+
                     ${escapeHtml(
-                        notFound.join("، ")
+                        found.join(
+                            "، "
+                        )
                     )}
+
+                </p>
+
+
+                <p>
+
+                    ❌ غير موجود في:
+
+                    ${escapeHtml(
+                        notFound.join(
+                            "، "
+                        )
+                    )}
+
                 </p>
 
             `;
 
 
-            missingContent.appendChild(
-                item
-            );
+            missingContent
+                .appendChild(
+                    item
+                );
 
         }
     );
 
 
-    missingSection.classList.remove(
-        "hidden"
-    );
+    missingSection
+        .classList
+        .remove(
+            "hidden"
+        );
 
 }
 
@@ -2673,7 +3209,8 @@ function displayMissing(results) {
 
 function displayAllProducts() {
 
-    productsContent.innerHTML = "";
+    productsContent.innerHTML =
+        "";
 
 
     offers.forEach(
@@ -2689,7 +3226,8 @@ function displayAllProducts() {
                 "products-offer";
 
 
-            let productsHtml = "";
+            let productsHtml =
+                "";
 
 
             offer.products.forEach(
@@ -2712,7 +3250,9 @@ function displayAllProducts() {
             );
 
 
-            if (!productsHtml) {
+            if (
+                !productsHtml
+            ) {
 
                 productsHtml = `
 
@@ -2731,10 +3271,13 @@ function displayAllProducts() {
             section.innerHTML = `
 
                 <h3>
+
                     ${escapeHtml(
                         offer.name
                     )}
+
                 </h3>
+
 
                 <div class="product-list">
 
@@ -2745,17 +3288,20 @@ function displayAllProducts() {
             `;
 
 
-            productsContent.appendChild(
-                section
-            );
+            productsContent
+                .appendChild(
+                    section
+                );
 
         }
     );
 
 
-    productsSection.classList.remove(
-        "hidden"
-    );
+    productsSection
+        .classList
+        .remove(
+            "hidden"
+        );
 
 }
 
@@ -2766,32 +3312,45 @@ function displayAllProducts() {
 
 function hideResults() {
 
-    summarySection.classList.add(
-        "hidden"
-    );
+    summarySection
+        .classList
+        .add(
+            "hidden"
+        );
 
-    comparisonSection.classList.add(
-        "hidden"
-    );
 
-    missingSection.classList.add(
-        "hidden"
-    );
+    comparisonSection
+        .classList
+        .add(
+            "hidden"
+        );
 
-    productsSection.classList.add(
-        "hidden"
-    );
+
+    missingSection
+        .classList
+        .add(
+            "hidden"
+        );
+
+
+    productsSection
+        .classList
+        .add(
+            "hidden"
+        );
 
 }
 
 
 /* =========================================================
-   COMPARE
+   MAIN COMPARE
 ========================================================= */
 
 async function compareOffers() {
 
-    if (!modelReady) {
+    if (
+        !modelReady
+    ) {
 
         status.textContent =
             "الذكاء الاصطناعي لم يجهز بعد.";
@@ -2804,7 +3363,8 @@ async function compareOffers() {
     if (
         offers.some(
             offer =>
-                offer.files.length === 0
+                offer.files.length ===
+                    0
         )
     ) {
 
@@ -2816,7 +3376,9 @@ async function compareOffers() {
     }
 
 
-    compareButton.disabled = true;
+    compareButton.disabled =
+        true;
+
 
     hideResults();
 
@@ -2834,7 +3396,9 @@ async function compareOffers() {
         ) {
 
             const offer =
-                offers[index];
+                offers[
+                    index
+                ];
 
 
             status.textContent =
@@ -2850,7 +3414,7 @@ async function compareOffers() {
 
 
         status.textContent =
-            "🧮 جاري مقارنة الأسعار...";
+            "🧮 جاري مقارنة الأسعار والكميات...";
 
 
         const results =
@@ -2879,19 +3443,25 @@ async function compareOffers() {
                 )
                 /
                 1000
-            ).toFixed(1);
+            ).toFixed(
+                1
+            );
 
 
         status.textContent =
             `✅ تمت المقارنة بنجاح خلال ${seconds} ثانية`;
 
 
-        comparisonSection.scrollIntoView(
-            {
-                behavior: "smooth",
-                block: "start"
-            }
-        );
+        comparisonSection
+            .scrollIntoView(
+                {
+                    behavior:
+                        "smooth",
+
+                    block:
+                        "start"
+                }
+            );
 
 
     } catch (error) {
